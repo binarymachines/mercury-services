@@ -11,6 +11,7 @@ import base64
 from collections import namedtuple
 import boto3
 from boto3 import session
+import botocore
 import uuid
 from snap import common
 from snap.loggers import transform_logger as log
@@ -223,12 +224,20 @@ class AWSCognitoService(object):
                                                                         AttributeName=attr_name)
 
     
+    def lookup_user(self, username):
+        try:
+            result = self.cognito_client.admin_get_user(UserPoolId=self.user_pool_id, Username=username)
+            return result
+        except botocore.errorfactory.UserNotFoundException as err:
+            return {}
+
+
     def user_create(self, username, attribute_list=[], **kwargs):
         payload = {}
         payload['DesiredDeliveryMediums'] = ['EMAIL'] # how to send invitation message to new user
         payload['ForceAliasCreation'] = False
         payload['MessageAction'] = 'SUPPRESS' # re-send confirmation message if user already exists
-        payload['TemporaryPassword'] = self.generate_temp_password()
+        payload['TemporaryPassword'] = kwargs.get('password')  or self.generate_temp_password()
         payload['UserAttributes'] = [{'Name': attr.name, 'Value': attr.value} for attr in attribute_list]
         payload['Username'] = username
         payload['UserPoolId'] = self.user_pool_id

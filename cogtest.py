@@ -9,6 +9,7 @@
         cogtest.py <configfile> --verification-code <attribute>
         cogtest.py <configfile> --verify-email <username>
         cogtest.py <configfile> --verify <attribute> <code>
+        cogtest.py <configfile> --lookup-user <username>
 
 '''
 
@@ -83,6 +84,12 @@ def main(args):
         result = cognito_svc.user_create(username, user_attrs)
         print('sent cognito request with result:', file=sys.stderr)
         print(result)
+
+    if args['--lookup-user']:
+        username = args['<username>']
+        result = cognito_svc.lookup_user(username)
+        print('sent cognito request with result:', file=sys.stderr)
+        print(json.dumps(result))
         
     if args['--initpw']:        
         username = args['--username']
