@@ -5,7 +5,9 @@
         cogtest.py <configfile> --newuser <username>
         cogtest.py <configfile> --initpw --username=<username> --password=<new-password> [--sessionfile=<filename>]
         cogtest.py <configfile> --reset --username=<username>
+        cogtest.py <configfile> --forgotpw --username=<username>
         cogtest.py <configfile> --verification-code <attribute>
+        cogtest.py <configfile> --verify-email <username>
         cogtest.py <configfile> --verify <attribute> <code>
 
 '''
@@ -35,6 +37,10 @@ def main(args):
     cognito_svc = services.lookup('cognito')
     result = None
 
+    if args['--verify-email']:
+        email = args['<username>']
+        return cognito_svc.force_verify_email(email)
+
     if args['--verify']:
         attr_name = args['<attribute>']
         code = args['<code>']        
@@ -53,6 +59,11 @@ def main(args):
         username = args['--username']
         result = cognito_svc.reset_password(username)
     
+    if args['--forgotpw']:
+        username = args['--username']
+        result = cognito_svc.forgot_password(username)
+        print(common.jsonpretty(result))
+
     if args['--login']:        
         username = args['--username']
         password = args['--password']
