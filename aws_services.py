@@ -142,7 +142,7 @@ COGNITO_AUTH_ERROR_MESSAGE = 'You must provide a valid set of AWS credentials to
 
 class AWSCognitoService(object):
     def __init__(self, **kwargs):     
-        kwreader = common.KeywordArgReader('user_pool_id', 'client_id', 'aws_region', 'aws_secret_key', 'aws_key_id')
+        kwreader = common.KeywordArgReader('user_pool_id', 'client_id', 'aws_region')
         kwreader.read(**kwargs)
         self.user_pool_id = kwreader.get_value('user_pool_id')
         self.client_id = kwreader.get_value('client_id')
@@ -162,7 +162,7 @@ class AWSCognitoService(object):
                                                aws_secret_access_key=secret_key,
                                                region_name=self.aws_region)
         else:
-            self.cognito_client = boto3.client('cognito_idp', region_name=self.aws_region)
+            self.cognito_client = boto3.client('cognito-idp', region_name=self.aws_region)
 
 
     def generate_secret_hash(self, username):
