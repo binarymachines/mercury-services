@@ -139,7 +139,7 @@ CognitoUserAttribute = namedtuple('CognitoUserAttribute', 'name value')
 
 class AWSCognitoService(object):
     def __init__(self, **kwargs):     
-        kwreader = common.KeywordArgReader('user_pool_id', 'client_id', 'aws_region', 'aws_secret_key', 'aws_key_id')
+        kwreader = common.KeywordArgReader('user_pool_id', 'client_id', 'aws_region')
         kwreader.read(**kwargs)
         self.user_pool_id = kwreader.get_value('user_pool_id')
         self.client_id = kwreader.get_value('client_id')
