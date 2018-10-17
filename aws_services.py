@@ -11,6 +11,7 @@ import base64
 from collections import namedtuple
 import boto3
 from boto3 import session
+import botocore
 import uuid
 from snap import common
 from snap.loggers import transform_logger as log
@@ -137,6 +138,8 @@ class KinesisServiceObject(object):
 
 CognitoUserAttribute = namedtuple('CognitoUserAttribute', 'name value')
 
+COGNITO_AUTH_ERROR_MESSAGE = 'You must provide a valid set of AWS credentials to start this service.'
+
 class AWSCognitoService(object):
     def __init__(self, **kwargs):     
         kwreader = common.KeywordArgReader('user_pool_id', 'client_id', 'aws_region')
@@ -152,14 +155,14 @@ class AWSCognitoService(object):
             key_id = kwargs.get('aws_key_id')
             secret_key = kwargs.get('aws_secret_key')
             if not key_id or not secret_key:
-                raise Exception(cognito_auth_error_mesage)
+                raise Exception(COGNITO_AUTH_ERROR_MESSAGE)
         
             self.cognito_client = boto3.client('cognito-idp',
                                                aws_access_key_id=key_id,
                                                aws_secret_access_key=secret_key,
                                                region_name=self.aws_region)
         else:
-            self.cognito_client = boto3.client('cognito_idp', region_name=self.aws_region)
+            self.cognito_client = boto3.client('cognito-idp', region_name=self.aws_region)
 
 
     def generate_secret_hash(self, username):
@@ -198,6 +201,16 @@ class AWSCognitoService(object):
             }
         return self.cognito_client.admin_reset_user_password(**payload)
 
+
+    def force_verify_email(self, username):        
+        payload = {
+            'UserPoolId': self.user_pool_id,
+            'Username': username,
+            'UserAttributes': [{ 'Name': 'email_verified', 'Value': 'true' }]
+        }
+        return self.cognito_client.admin_update_user_attributes(**payload)
+
+
     def verify_named_attribute(self, attr_name, access_token, code):
         payload = {}
         payload['AccessToken'] = access_token
@@ -211,17 +224,33 @@ class AWSCognitoService(object):
                                                                         AttributeName=attr_name)
 
     
+    def lookup_user(self, username):
+        try:
+            result = self.cognito_client.admin_get_user(UserPoolId=self.user_pool_id, Username=username)
+            return result
+        except botocore.errorfactory.UserNotFoundException as err:
+            return {}
+
+
     def user_create(self, username, attribute_list=[], **kwargs):
         payload = {}
         payload['DesiredDeliveryMediums'] = ['EMAIL'] # how to send invitation message to new user
         payload['ForceAliasCreation'] = False
         payload['MessageAction'] = 'SUPPRESS' # re-send confirmation message if user already exists
-        payload['TemporaryPassword'] = self.generate_temp_password()
+        payload['TemporaryPassword'] = kwargs.get('password')  or self.generate_temp_password()
         payload['UserAttributes'] = [{'Name': attr.name, 'Value': attr.value} for attr in attribute_list]
         payload['Username'] = username
         payload['UserPoolId'] = self.user_pool_id
         # skip ValidationData parameter for now; may be required later
         return self.cognito_client.admin_create_user(**payload)
+
+
+    def forgot_password(self, username):
+        payload = {}
+        payload['ClientId'] = self.client_id
+        payload['Username'] = username
+        payload['SecretHash'] = self.generate_secret_hash(username)
+        return self.cognito_client.forgot_password(**payload)
 
     
     def user_login(self, username, password, **kwargs):
@@ -238,8 +267,6 @@ class AWSCognitoService(object):
         return self.cognito_client.admin_initiate_auth(**payload)
         # TODO: status = CognitoAuthStatus(response) and return the status object
         
-
-
 
 class AWSEmailService(object):
     def __init__(self, **kwargs):
