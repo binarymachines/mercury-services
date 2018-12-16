@@ -83,7 +83,13 @@ class S3ServiceObject():
             self.s3client.upload_fileobj(data, bucket_name, s3_key)
         return s3_key
 
-
+    
+    def upload_bytes(self, bytes_obj, bucket_name, bucket_path):
+        s3_key = bucket_path
+        self.s3client.put_object(Body=bytes_obj, Bucket=bucket_name, Key=s3_key)
+        return s3_key
+    
+    
     def download_object(self, bucket_name, s3_key_string):
         s3_object_key = S3Key(s3_key_string)
         local_filename = os.path.join(self.local_tmp_path, s3_object_key.object_name)
