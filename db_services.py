@@ -2,46 +2,64 @@
 
 
 import os
-
-import sqldbx
-import couchbasedbx as cbx
-import redisx
-import telegraf
-
+import uuid
 from snap import snap
 from snap import common
-import constants as const
+from mercury import sqldbx as sqlx
+
+from contextlib import contextmanager
+from sqlalchemy.ext.automap import automap_base
+from mercury_services.aws_services import S3ServiceObject
 
 from sqlalchemy import Column, ForeignKey, Integer, String
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from sqlalchemy import create_engine
 from sqlalchemy_utils import UUIDType
-import uuid
+
 
 Base = declarative_base()
 
 
-class PostgresServiceObject(object):
+class PostgreSQLServiceObject(object):
     def __init__(self, **kwargs):
-        self.log = logger
-        self.host = kwargs['host']
-        self.port = int(kwargs.get('port', 5432))
+        self.db = sqlx.PostgreSQLDatabase(kwargs['host'],
+                                          kwargs['database'])
         self.username = kwargs['username']
+        self.password = kwargs['password']        
         self.schema = kwargs['schema']
-        self.db_name = kwargs['database']
-        self.db = sqldbx.PostgreSQLDatabase(self.host, self.db_name, self.port)
-        self.db.login(self.username, kwargs['password'])
-        self._data_manager = sqldbx.PersistenceManager(self.db)
+        self.data_manager = None
+        self.db.login(self.username, self.password)        
+        self.data_manager = sqlx.PersistenceManager(self.db)
+        self.Base = automap_base()
+        self.Base.prepare(self.db.engine, reflect=True)
 
 
     @property
     def data_manager(self):
-        return self._data_manager
+        return self.data_manager
+
 
     @property
     def database(self):
         return self.db
+
+
+    def get_connection(self):
+        return self.db.engine.connect()
+
+
+    @contextmanager
+    def txn_scope(self):
+        session = self.db.get_session()
+        try:
+            yield session
+            session.commit()
+        except:
+            session.rollback()
+            raise
+        finally:
+            session.close()
 
 
 class MSSQLServiceObject(object):
