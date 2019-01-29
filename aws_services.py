@@ -51,6 +51,8 @@ class S3ServiceObject():
 
         self.local_tmp_path = kwargs['local_temp_path']
         self.s3session = None
+        self.aws_access_key_id = None
+        self.aws_secret_access_key = None
 
         # we set this to True if we are initializing this object from inside an AWS Lambda,
         # because in that case we do not require the aws credential parameters to be set.
@@ -60,18 +62,17 @@ class S3ServiceObject():
 
         if not should_authenticate_via_iam:
             log.info("NOT authenticating via IAM. Setting credentials now.")
-            key_id = kwargs.get('aws_key_id')
-            secret_key = kwargs.get('aws_secret_key')
-            if not key_id or not secret_key:
+            self.aws_access_key_id = kwargs.get('aws_key_id')
+            self.aws_secret_access_key = kwargs.get('aws_secret_key')
+            if not self.aws_secret_access_key or not self.aws_access_key_id:
                 raise Exception(conditional_auth_message)           
             self.s3client = boto3.client('s3',
-                                         aws_access_key_id=key_id,
-                                         aws_secret_access_key=secret_key)
+                                         aws_access_key_id=self.aws_access_key_id,
+                                         aws_secret_access_key=self.aws_secret_access_key)
         else:
             self.s3client = boto3.client('s3')
-            
+ 
 
-        
     def upload_object(self, local_filename, bucket_name, bucket_path=None):
         s3_key = None
         with open(local_filename, 'rb') as data:
