@@ -87,27 +87,66 @@ class MSSQLServiceObject(object):
         return self.db
 
 
-class RedshiftServiceObject():
-    def __init__(self, logger, **kwargs):
-        logger.info('>>> initializing RedshiftServiceObject with params: %s' % (kwargs))
-
+class RedshiftServiceObject(object):
+    def __init__(self, **kwargs):
         self.host = kwargs['host']
-        self.db_name = kwargs['db_name']
+        self.db_name = kwargs['database']
         self.port = kwargs['port']
         self.username = kwargs['username']
         self.schema = kwargs['schema']
-        self.data_manager = None
-        self.db = sqldbx.PostgreSQLDatabase(self.host, self.db_name, self.port)
+        password = kwargs['password']
+        
+        self.metadata = None
+        self.engine = None
+        self.session_factory = None
+        self.Base = None
+                
+        url_template = '{db_type}://{user}:{passwd}@{host}:{port}/{database}'
+        db_url = url_template.format(db_type='redshift+psycopg2',
+                                     user=self.username,
+                                     passwd=password,
+                                     host=self.host,
+                                     port=self.port,
+                                     database=self.db_name)
+        retries = 0
+        connected = False
+        while not connected and retries < 3:
+            try:
+                self.engine = sqla.create_engine(db_url, echo=False)
+                self.metadata = MetaData(schema=self.schema)
+                self.Base = automap_base(bind=self.engine, metadata=self.metadata)
+                self.Base.prepare(self.engine, reflect=True)
+                self.metadata.reflect(bind=self.engine)
+                self.session_factory = sessionmaker(bind=self.engine, autoflush=False, autocommit=False)
+                connected = True
+                print('### Connected to Redshift DB.')
+                
+            except Exception as err:
+                print(err)
+                print(err.__class__.__name__)
+                print(err.__dict__)
+                time.sleep(1)
+                retries += 1
+            
+        if not connected:
+            raise Exception('!!! Unable to connect to Redshift db on host %s at port %s.' % (self.host, self.port))
+        
 
+    @contextmanager
+    def txn_scope(self):
+        session = self.session_factory()
+        try:
+            yield session
+            session.commit()
+        except:
+            session.rollback()
+            raise
+        finally:
+            session.close()
 
-    def login(self, password):
-        self.db.login(self.username, password, self.schema)
-        self.data_manager = sqldbx.PersistenceManager(self.db)
-
-
+        
     def get_connection(self):
-        return self.db.engine.connect()
-
+        return self.engine.connect()
 
 
 class CouchbaseServiceObject():

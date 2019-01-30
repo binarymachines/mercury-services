@@ -18,10 +18,11 @@ from snap.loggers import transform_logger as log
 
 
 class S3Key(object):
-    def __init__(self, s3_key_string):
-        self.folder_path = self.extract_folder_path(s3_key_string)
-        self.object_name = self.extract_object_name(s3_key_string)
-        self.full_name = s3_key_string
+    def __init__(self, bucket_name, s3_object_path):
+        self.bucket = bucket_name
+        self.folder_path = self.extract_folder_path(s3_object_path)
+        self.object_name = self.extract_object_name(s3_object_path)
+        self.full_name = s3_object_path
 
     def extract_folder_path(self, s3_key_string):
         if s3_key_string.find('/') == -1:
@@ -33,6 +34,14 @@ class S3Key(object):
         if s3_key_string.find('/') == -1:
             return s3_key_string
         return s3_key_string.split('/')[-1]
+
+    def __str__(self):
+        return self.full_name
+
+    @property
+    def uri(self):
+	    return os.path.join('s3://', self.bucket, self.full_name)
+
 
 
 s3_auth_error_mesage = '''
@@ -51,6 +60,8 @@ class S3ServiceObject():
 
         self.local_tmp_path = kwargs['local_temp_path']
         self.s3session = None
+        self.aws_access_key_id = None
+        self.aws_secret_access_key = None
 
         # we set this to True if we are initializing this object from inside an AWS Lambda,
         # because in that case we do not require the aws credential parameters to be set.
@@ -60,28 +71,29 @@ class S3ServiceObject():
 
         if not should_authenticate_via_iam:
             log.info("NOT authenticating via IAM. Setting credentials now.")
-            key_id = kwargs.get('aws_key_id')
-            secret_key = kwargs.get('aws_secret_key')
-            if not key_id or not secret_key:
+            self.aws_access_key_id = kwargs.get('aws_key_id')
+            self.aws_secret_access_key = kwargs.get('aws_secret_key')
+            if not self.aws_secret_access_key or not self.aws_access_key_id:
                 raise Exception(conditional_auth_message)           
             self.s3client = boto3.client('s3',
-                                         aws_access_key_id=key_id,
-                                         aws_secret_access_key=secret_key)
+                                         aws_access_key_id=self.aws_access_key_id,
+                                         aws_secret_access_key=self.aws_secret_access_key)
         else:
             self.s3client = boto3.client('s3')
-            
+ 
 
-        
     def upload_object(self, local_filename, bucket_name, bucket_path=None):
-        s3_key = None
+        s3_path = None
         with open(local_filename, 'rb') as data:
             base_filename = os.path.basename(local_filename)
             if bucket_path:
-                s3_key = os.path.join(bucket_path, base_filename)
+                s3_path = os.path.join(bucket_path, base_filename)
             else:
-                s3_key = base_filename
-            self.s3client.upload_fileobj(data, bucket_name, s3_key)
-        return s3_key
+                s3_path = base_filename
+
+            self.s3client.upload_fileobj(data, bucket_name, s3_path)
+
+        return S3Key(bucket_name, s3_path)
 
     
     def upload_bytes(self, bytes_obj, bucket_name, bucket_path):
